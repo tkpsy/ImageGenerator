@@ -1,54 +1,40 @@
 import torch
-from PIL import Image
-from diffusers import StableDiffusionXLPipeline, AutoencoderKL  
+from diffusers import StableDiffusionPipeline
 from diffusers.utils import load_image
 
-# デバイス設定
-device = "cuda" if torch.cuda.is_available() else "mps"
+# 1. ベースモデルとLoRAのIDまたはパスを設定
+base_model_id = "./models/nova_xl"
+lora_path = "./models/bocchi_lora"
 
-# Load VAE component
-vae = AutoencoderKL.from_pretrained(
-    "madebyollin/sdxl-vae-fp16-fix", 
-    torch_dtype=torch.float16
-)
+# 2. パイプラインをロード
+pipe = StableDiffusionPipeline.from_pretrained(base_model_id, torch_dtype=torch.float16)
+pipe = pipe.to("mps")
 
-# Configure the pipeline
-pipe = StableDiffusionXLPipeline.from_pretrained(
-    "Linaqruf/animagine-xl-2.0", 
-    vae=vae,
-    torch_dtype=torch.float16, 
-    use_safetensors=True, 
-    variant="fp16"
-)
+# 3. LoRAとSD1.5対応のIP-Adapterをロード
+pipe.load_lora_weights(lora_path)
 
-# IP-Adapter 読み込み（SDXL）
 pipe.load_ip_adapter(
     "h94/IP-Adapter",
-    subfolder="sdxl_models",
-    weight_name="ip-adapter_sdxl.bin"
+    subfolder="models", # SD1.5モデルが格納されているサブフォルダー
+    weight_name="ip-adapter_sd15.bin" # SD1.5向けのweightファイル
 )
 
-# ✅ LoRA読み込み（例: pastel-mix）
-lora_model_id = "Linaqruf/style-enhancer-xl-lora"
-lora_filename = "style-enhancer-xl.safetensors"
-lora_scale = 0.6
-
-# Load and fuse LoRA weights
-pipe.load_lora_weights(lora_model_id, weight_name=lora_filename)
-pipe.fuse_lora(lora_scale=lora_scale)
-
-# 画像の前処理
 ip_image = load_image("rikka.png").resize((512, 512))
 
-# プロンプトによる画像生成
-prompt = "face focus, cute, masterpiece, best quality, 1girl, looking at viewer, upper body"
-result = pipe(
-    prompt=prompt,
-    num_inference_steps=40,
-    guidance_scale=4.5,
-    ip_adapter_image=ip_image,
-    generator=torch.manual_seed(42)
-)
+# 4. プロンプトと生成パラメータを設定
+prompt = "pixel art style, a cute girl wearing a wizard stick, magical sparks, detailed"
+negative_prompt = "blurry, low quality, noise, deformed, bad anatomy, ugly"
 
-# 保存
-result.images[0].save("output_lora.png")
+lora_scale = 0.8
+
+# 5. 画像を生成
+generated_image = pipe(
+    prompt=prompt,
+    negative_prompt=negative_prompt,
+    cross_attention_kwargs={"scale": lora_scale},
+    ip_adapter_image=ip_image,
+).images[0]
+
+# 6. 生成された画像を保存
+generated_image.save("generated_image_with_lora_ip.png")
+print("画像が正常に生成されました: generated_image_with_lora_ip.png")

@@ -26,7 +26,7 @@ pipe.load_ip_adapter(
 ip_image = load_image("reference.png").resize((512, 512))
 
 # プロンプトによる画像生成
-prompt = "anime illustration of a man playing baseball"
+prompt = "a cute girl, anime Japanese" #"a photo of a man playing baseball"
 result = pipe(
     prompt=prompt,
     num_inference_steps=40,
